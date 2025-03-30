@@ -23,15 +23,19 @@ class ApplicationInfo {
 if (-not $isAdmin) {
     if (-not (Test-Path $flagFilePath)) {
         $result = [System.Windows.Forms.MessageBox]::Show("You will be prompted for administrator rights, as Sunshine requires admin in order to modify the apps.json file.", "Administrator Required", [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Information)
-        New-Item -ItemType File -Path $flagFilePath -Force
         if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
             exit
         }
+
+        # If the user clicks OK, we will run the script with elevated privileges.
+        # Create the flag file to indicate that the user has been warned about admin rights.
+        # This will prevent the prompt from appearing again in future runs.
+        New-Item -ItemType File -Path $flagFilePath -Force
     }
-    else {
-        Start-Process powershell.exe -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`"" -WindowStyle Hidden
-        exit
-    }
+   
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`"" -WindowStyle Hidden
+    exit
+    
 }
 
 $scriptPath = Split-Path $MyInvocation.MyCommand.Path -Parent
@@ -108,13 +112,15 @@ function ParseGames($configPath) {
 
             $app.waitAll = if ($_.'wait-all') {
                 ($_.'wait-all' -eq $true) -or ($_.'wait-all' -eq "true")
-            } else {
+            }
+            else {
                 $false
             }
 
             $app.autoDetach = if ($_.'auto-detach') {
                 ($_.'auto-detach' -eq $true) -or ($_.'auto-detach' -eq "true")
-            } else {
+            }
+            else {
                 $false
             }
 
@@ -217,105 +223,105 @@ $playNitePathTextBox = $window.FindName("PlaynitePath")
 
 # Config folder Browse button click event handler using folder picker
 $window.FindName("BrowseButton").Add_Click({
-    ShowFolderBrowserDialog -textBox $configPathTextBox -initialDirectory $configPathTextBox.Text
-    LoadGames -configPath $configPathTextBox.Text
-    SaveSettings
-})
+        ShowFolderBrowserDialog -textBox $configPathTextBox -initialDirectory $configPathTextBox.Text
+        LoadGames -configPath $configPathTextBox.Text
+        SaveSettings
+    })
 
 $window.FindName("PlayniteBrowseButton").Add_Click({
-    ShowOpenFileDialog -filter "Playnite Executable|Playnite.DesktopApp.exe" -initialDirectory ([System.IO.Path]::GetDirectoryName($playNitePathTextBox.Text)) -textBox $playNitePathTextBox
-    SaveSettings
-})
+        ShowOpenFileDialog -filter "Playnite Executable|Playnite.DesktopApp.exe" -initialDirectory ([System.IO.Path]::GetDirectoryName($playNitePathTextBox.Text)) -textBox $playNitePathTextBox
+        SaveSettings
+    })
 
 $window.FindName("InstallButton").Add_Click({
-    $installCount = 0
-    $playniteRoot = Split-Path $playNitePathTextBox.Text -Parent
+        $installCount = 0
+        $playniteRoot = Split-Path $playNitePathTextBox.Text -Parent
 
-    $updatedApps = ParseGames -configPath $configPathTextBox.Text
-    $updatedApps = RemoveDuplicates -apps $updatedApps
+        $updatedApps = ParseGames -configPath $configPathTextBox.Text
+        $updatedApps = RemoveDuplicates -apps $updatedApps
 
-    foreach ($playniteApp in $updatedApps) {
-        $installCount += 1
-        $playniteApp.detached = ""
-        $playniteApp.cmd = "powershell.exe -executionpolicy bypass -windowstyle hidden -file `"$scriptPath\PlayniteWatcher.ps1`" $($playniteApp.uniqueId)"
-    }
+        foreach ($playniteApp in $updatedApps) {
+            $installCount += 1
+            $playniteApp.detached = ""
+            $playniteApp.cmd = "powershell.exe -executionpolicy bypass -windowstyle hidden -file `"$scriptPath\PlayniteWatcher.ps1`" $($playniteApp.uniqueId)"
+        }
 
-    ## add FullScreen applet
-    if ($null -eq ($updatedApps | Where-Object { $_.name -eq "PlayNite FullScreen App" })) {
-        $updatedApps = , [PSCustomObject]@{
-            applicationName = "PlayNite FullScreen App"
-            imagePath       = "$scriptPath\playnite-boxart.png"
-            cmd             = "powershell.exe -executionpolicy bypass -windowstyle hidden -file `"$scriptPath\PlayniteWatcher.ps1`" FullScreen"
-            detached        = ""
-            waitAll         = $false
-            autoDetach      = $false
-            exitTimeout     = 0
-            uuid            = "14D9821B-7EA2-48C2-9AF7-970608282F93"
-        } + $updatedApps
-    }
+        ## add FullScreen applet
+        if ($null -eq ($updatedApps | Where-Object { $_.name -eq "PlayNite FullScreen App" })) {
+            $updatedApps = , [PSCustomObject]@{
+                applicationName = "PlayNite FullScreen App"
+                imagePath       = "$scriptPath\playnite-boxart.png"
+                cmd             = "powershell.exe -executionpolicy bypass -windowstyle hidden -file `"$scriptPath\PlayniteWatcher.ps1`" FullScreen"
+                detached        = ""
+                waitAll         = $false
+                autoDetach      = $false
+                exitTimeout     = 0
+                uuid            = "14D9821B-7EA2-48C2-9AF7-970608282F93"
+            } + $updatedApps
+        }
 
-    Remove-Item -Path "$playniteRoot\Extensions\PlayniteWatcherExt" -Recurse -Force -ErrorAction SilentlyContinue
-    Copy-Item -Path "./PlayNiteWatcherExt" -Destination "$playniteRoot\Extensions\PlayNiteWatcherExt" -Force -Recurse
-    SaveChanges -configPath $configPathTextBox.Text -updatedApps $updatedApps
-
-    $scopedInstall = {
-        . $scriptPath\PrepCommandInstaller.ps1 $true
-    }
-    & $scopedInstall
-
-    ## Open it in a background thread, so that if the user disconnects from a Moonlight session, Playnite will still restart.
-    Start-Job -ArgumentList $playNitePathTextBox.Text {
-        param($path)
-        Start-Sleep -Seconds 5
-        Get-Process Playnite.DesktopApp -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-        Start-Process -FilePath explorer.exe -ArgumentList $path
-    }
-
-    [System.Windows.Forms.MessageBox]::Show("The script has been successfully installed to $installCount application(s)!", "Installation Complete!", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-})
-
-$window.FindName("UninstallButton").Add_Click({
-    $msgBoxTitle = "Uninstall script"
-    $msgBoxText = "Are you sure you want to remove this script? This will remove all exported games from Playnite"
-    $msgBoxButtons = [System.Windows.Forms.MessageBoxButtons]::YesNo
-    $msgBoxIcon = [System.Windows.Forms.MessageBoxIcon]::Warning
-    $msgBoxResult = [System.Windows.Forms.MessageBox]::Show($msgBoxText, $msgBoxTitle, $msgBoxButtons, $msgBoxIcon)
-
-    if ($msgBoxResult -eq [System.Windows.Forms.DialogResult]::Yes) {
-        $playnitePath = $playNitePathTextBox.Text
-        $playniteRoot = Split-Path $playnitePath -Parent
-        $parsedApps = ParseGames -configPath $configPathTextBox.Text | ForEach-Object { $_.uniqueId = ""; $_ }
-        SaveChanges -configPath $configPathTextBox.Text -updatedApps $parsedApps
+        Remove-Item -Path "$playniteRoot\Extensions\PlayniteWatcherExt" -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path "./PlayNiteWatcherExt" -Destination "$playniteRoot\Extensions\PlayNiteWatcherExt" -Force -Recurse
+        SaveChanges -configPath $configPathTextBox.Text -updatedApps $updatedApps
 
         $scopedInstall = {
-            . $scriptPath\PrepCommandInstaller.ps1 $false
+            . $scriptPath\PrepCommandInstaller.ps1 $true
         }
-        Remove-Item "$playniteRoot\Extensions\PlayNiteWatcherExt" -Force -Recurse
         & $scopedInstall
-        [System.Windows.Forms.MessageBox]::Show("You can now close this application, the script has been successfully uninstalled", "Uninstall Complete!", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-    }
-})
+
+        ## Open it in a background thread, so that if the user disconnects from a Moonlight session, Playnite will still restart.
+        Start-Job -ArgumentList $playNitePathTextBox.Text {
+            param($path)
+            Start-Sleep -Seconds 5
+            Get-Process Playnite.DesktopApp -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
+            Start-Process -FilePath explorer.exe -ArgumentList $path
+        }
+
+        [System.Windows.Forms.MessageBox]::Show("The script has been successfully installed to $installCount application(s)!", "Installation Complete!", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    })
+
+$window.FindName("UninstallButton").Add_Click({
+        $msgBoxTitle = "Uninstall script"
+        $msgBoxText = "Are you sure you want to remove this script? This will remove all exported games from Playnite"
+        $msgBoxButtons = [System.Windows.Forms.MessageBoxButtons]::YesNo
+        $msgBoxIcon = [System.Windows.Forms.MessageBoxIcon]::Warning
+        $msgBoxResult = [System.Windows.Forms.MessageBox]::Show($msgBoxText, $msgBoxTitle, $msgBoxButtons, $msgBoxIcon)
+
+        if ($msgBoxResult -eq [System.Windows.Forms.DialogResult]::Yes) {
+            $playnitePath = $playNitePathTextBox.Text
+            $playniteRoot = Split-Path $playnitePath -Parent
+            $parsedApps = ParseGames -configPath $configPathTextBox.Text | ForEach-Object { $_.uniqueId = ""; $_ }
+            SaveChanges -configPath $configPathTextBox.Text -updatedApps $parsedApps
+
+            $scopedInstall = {
+                . $scriptPath\PrepCommandInstaller.ps1 $false
+            }
+            Remove-Item "$playniteRoot\Extensions\PlayNiteWatcherExt" -Force -Recurse
+            & $scopedInstall
+            [System.Windows.Forms.MessageBox]::Show("You can now close this application, the script has been successfully uninstalled", "Uninstall Complete!", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        }
+    })
 
 $window.Add_Loaded({
-    try {
-        LoadConfigFilePath
-    }
-    catch {
-        [System.Windows.Forms.MessageBox]::Show("An issue was encountered while attempting to retrieve your Sunshine config folder. Once you dismiss this message, a window will open, prompting you to locate the Sunshine config folder. Please navigate to your Sunshine config folder and then click Open.", "Error: Could not find config folder", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-        ShowFolderBrowserDialog -textBox $configPathTextBox -initialDirectory $env:ProgramFiles
-    }
-    try {
-        $path = LoadPlayniteExecutablePath
-        if (-not (Test-Path $path)) {
-            throw "Could not locate PlayNite"
+        try {
+            LoadConfigFilePath
         }
-    }
-    catch {
-        [System.Windows.Forms.MessageBox]::Show("An issue was encountered while attempting to retrieve the PlayNite executable path. Once you dismiss this message, a window will open, prompting you to locate the PlayNite folder. Please ensure that you choose the PlayNite folder and select the `Playnite.DesktopApp.exe` file within it.", "Error: Could not find PlayNite Executable", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-        ShowOpenFileDialog -filter "Playnite Exe|Playnite.DesktopApp.exe|All files (*.*)|*.*" -initialDirectory $env:ProgramFiles -textBox $playNitePathTextBox
-    }
-    SaveSettings
-})
+        catch {
+            [System.Windows.Forms.MessageBox]::Show("An issue was encountered while attempting to retrieve your Sunshine config folder. Once you dismiss this message, a window will open, prompting you to locate the Sunshine config folder. Please navigate to your Sunshine config folder and then click Open.", "Error: Could not find config folder", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            ShowFolderBrowserDialog -textBox $configPathTextBox -initialDirectory $env:ProgramFiles
+        }
+        try {
+            $path = LoadPlayniteExecutablePath
+            if (-not (Test-Path $path)) {
+                throw "Could not locate PlayNite"
+            }
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show("An issue was encountered while attempting to retrieve the PlayNite executable path. Once you dismiss this message, a window will open, prompting you to locate the PlayNite folder. Please ensure that you choose the PlayNite folder and select the `Playnite.DesktopApp.exe` file within it.", "Error: Could not find PlayNite Executable", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            ShowOpenFileDialog -filter "Playnite Exe|Playnite.DesktopApp.exe|All files (*.*)|*.*" -initialDirectory $env:ProgramFiles -textBox $playNitePathTextBox
+        }
+        SaveSettings
+    })
 
 # Show WPF window
 $window.ShowDialog() | Out-Null
