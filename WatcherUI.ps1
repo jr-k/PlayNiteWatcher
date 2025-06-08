@@ -60,6 +60,15 @@ function LoadPlayniteExecutablePath() {
     return $foundPath.Replace("\\", "\")
 }
 
+function LoadVirtualDisplaySetting() {
+    # Retrieve the virtual display setting from the primary script.
+    $scriptContents = Get-Content "./PlayniteWatcher.ps1"
+    $ma = $scriptContents | select-string '(\$virtualDisplayEnabled\s*=\s*)\$?(true|false)'
+    if ($ma) {
+        $enableVirtualDisplays.IsChecked = [System.Convert]::ToBoolean($ma.Matches.Groups[2].Value)
+    }
+}
+
 function SaveChanges($configPath, $updatedApps) {
     $appsJsonPath = Join-Path $configPath "apps.json"
     $appConfiguration = Get-Content -Encoding utf8 -Path $appsJsonPath -Raw | ConvertFrom-Json
@@ -154,8 +163,10 @@ function SaveSettings() {
         $content = Get-Content -Encoding utf8 -Path $filePath
         $playNitePattern = '(\$playNitePath\s*=\s*")[^"]*(")'
         $configPattern = '(\$sunshineConfigPath\s*=\s*")[^"]*(")'
+        $virtualDisplayPattern = '(\$virtualDisplayEnabled\s*=\s*)\$?(true|false)'
         $updatedContent = $content -replace $playNitePattern, "`$1$($playnitePath.Replace('\', '\\'))`$2"
         $updatedContent = $updatedContent -replace $configPattern, "`$1$($configPathTextBox.Text.Replace('\', '\\'))`$2"
+        $updatedContent = $updatedContent -replace $virtualDisplayPattern, "`$1`$$($enableVirtualDisplays.IsChecked.ToString().ToLower())"
         Set-Content -Path $filePath -Value $updatedContent
     }
 }
@@ -235,6 +246,11 @@ $window.FindName("PlayniteBrowseButton").Add_Click({
     SaveSettings
 })
 
+# Add click event handler for virtual display checkbox
+$window.FindName("EnableVirtualDisplays").Add_Click({
+    SaveSettings
+})
+
 $window.FindName("InstallButton").Add_Click({
     $installCount = 0
     $playniteRoot = Split-Path $playNitePathTextBox.Text -Parent
@@ -308,6 +324,7 @@ $window.FindName("UninstallButton").Add_Click({
 $window.Add_Loaded({
     try {
         LoadConfigFilePath
+        LoadVirtualDisplaySetting
     }
     catch {
         [System.Windows.Forms.MessageBox]::Show("An issue was encountered while attempting to retrieve your Sunshine config folder. Once you dismiss this message, a window will open, prompting you to locate the Sunshine config folder. Please navigate to your Sunshine config folder and then click Open.", "Error: Could not find config folder", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
