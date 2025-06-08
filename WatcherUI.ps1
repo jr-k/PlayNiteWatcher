@@ -324,7 +324,6 @@ $window.FindName("UninstallButton").Add_Click({
 $window.Add_Loaded({
     try {
         LoadConfigFilePath
-        LoadVirtualDisplaySetting
     }
     catch {
         [System.Windows.Forms.MessageBox]::Show("An issue was encountered while attempting to retrieve your Sunshine config folder. Once you dismiss this message, a window will open, prompting you to locate the Sunshine config folder. Please navigate to your Sunshine config folder and then click Open.", "Error: Could not find config folder", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
@@ -340,6 +339,8 @@ $window.Add_Loaded({
         [System.Windows.Forms.MessageBox]::Show("An issue was encountered while attempting to retrieve the PlayNite executable path. Once you dismiss this message, a window will open, prompting you to locate the PlayNite folder. Please ensure that you choose the PlayNite folder and select the `Playnite.DesktopApp.exe` file within it.", "Error: Could not find PlayNite Executable", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
         ShowOpenFileDialog -filter "Playnite Exe|Playnite.DesktopApp.exe|All files (*.*)|*.*" -initialDirectory $env:ProgramFiles -textBox $playNitePathTextBox
     }
+
+    LoadVirtualDisplaySetting
     SaveSettings
 })
 
