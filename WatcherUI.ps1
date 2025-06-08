@@ -15,6 +15,7 @@ class ApplicationInfo {
     [string]$detached
     [string]$imagePath
     [bool]$waitAll
+    [bool]$virtualDisplay
     [bool]$autoDetach
     [int]$exitTimeout
 }
@@ -73,6 +74,7 @@ function SaveChanges($configPath, $updatedApps) {
             'image-path'   = $app.imagePath
             name           = $app.applicationName
             'wait-all'     = $app.waitAll
+            'virtual-display' = $app.virtualDisplay
             'exit-timeout' = $app.exitTimeout
             'auto-detach'  = $app.autoDetach
             'uuid'         = $app.uuid
@@ -104,6 +106,7 @@ function ParseGames($configPath) {
             $app.imagePath = $_.'image-path'
             $app.cmd = $_.cmd
             $app.detached = $_.detached
+            $app.virtualDisplay = $enableVirtualDisplays.IsChecked
             $app.exitTimeout = if ($_.'exit-timeout') { $_.'exit-timeout' } else { 0 }
 
             $app.waitAll = if ($_.'wait-all') {
@@ -180,9 +183,10 @@ function ShowOpenFileDialog($filter, $initialDirectory, $textBox) {
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Playnite Watcher Installer" Height="230" Width="720">
+        Title="Playnite Watcher Installer" Height="250" Width="720">
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -198,11 +202,14 @@ function ShowOpenFileDialog($filter, $initialDirectory, $textBox) {
             <TextBox Name="PlaynitePath" Text="C:\Program Files\Playnite\Playnite.DesktopApp.exe" Margin="5,0,5,0" Width="325" Height="25" IsReadOnly="true"/>
             <Button Name="PlayniteBrowseButton" Content="Browse" Width="75" HorizontalAlignment="Left" Margin="5,0,5,0" Height="25"/>
         </DockPanel>
-        <DockPanel Grid.Row="2" Margin="10" VerticalAlignment="Top">
+        <DockPanel Grid.Row="2" Margin="10">
+            <CheckBox Name="EnableVirtualDisplays" Content="Enable Virtual Displays" VerticalAlignment="Center" Margin="5,0,5,0"/>
+        </DockPanel>
+        <DockPanel Grid.Row="3" Margin="10" VerticalAlignment="Top">
             <Button Name="InstallButton" Content="Install" Width="75" Height="25" Margin="2,0,2,0"/>
             <Button Name="UninstallButton" Content="Uninstall" Width="75" Height="25" Margin="2,0,2,0"/>
         </DockPanel>
-        <TextBlock Grid.Row="3" Margin="0" TextWrapping="Wrap" HorizontalAlignment="Center" FontWeight="Bold">
+        <TextBlock Grid.Row="4" Margin="0" TextWrapping="Wrap" HorizontalAlignment="Center" FontWeight="Bold">
         NOTICE: Clicking install or uninstall will terminate existing Moonlight sessions and restart Playnite to finish the installation.
         </TextBlock>
     </Grid>
@@ -214,6 +221,7 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 
 $configPathTextBox = $window.FindName("SunshineConfigFolder")
 $playNitePathTextBox = $window.FindName("PlaynitePath")
+$enableVirtualDisplays = $window.FindName("EnableVirtualDisplays")
 
 # Config folder Browse button click event handler using folder picker
 $window.FindName("BrowseButton").Add_Click({
@@ -249,6 +257,7 @@ $window.FindName("InstallButton").Add_Click({
             detached        = ""
             waitAll         = $false
             autoDetach      = $false
+            virtualDisplay  = $enableVirtualDisplays.IsChecked
             exitTimeout     = 0
             uuid            = "14D9821B-7EA2-48C2-9AF7-970608282F93"
         } + $updatedApps
